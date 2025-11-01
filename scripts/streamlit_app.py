@@ -539,6 +539,22 @@ def main() -> None:
 
     # Enriquecimento feito antes; agora renderização por bloco
     if entry_type == "both":
+        # Campo de valor base acima dos blocos BACK/LAY quando ambos estão selecionados
+        if "base_amount" not in st.session_state:
+            st.session_state["base_amount"] = 10.00
+        cba_top, _ = st.columns([1, 6])
+        with cba_top:
+            st.number_input(
+                "Valor base (Stake e Liability)",
+                min_value=0.01,
+                max_value=100000.0,
+                value=float(st.session_state["base_amount"]),
+                step=0.50,
+                format="%.2f",
+                key="base_amount",
+                label_visibility="collapsed",
+            )
+            st.caption("Stake/Liab base")
         render_block("Resultados BACK", filt[filt["entry_type"] == "back"], "back")
         render_block("Resultados LAY", filt[filt["entry_type"] == "lay"], "lay")
     else:
@@ -572,22 +588,23 @@ def main() -> None:
         acc_val = (num_greens / len(filt)) if len(filt) > 0 else 0.0
         st.metric("Assertividade", f"{acc_val:.2%}")
 
-    # Campo compacto antes do cabeçalho de Stake para definir o valor base
-    if "base_amount" not in st.session_state:
-        st.session_state["base_amount"] = 10.00
-    cba1, _ = st.columns([1, 6])
-    with cba1:
-        st.number_input(
-            "Valor base (Stake e Liability)",
-            min_value=0.01,
-            max_value=100000.0,
-            value=float(st.session_state["base_amount"]),
-            step=0.50,
-            format="%.2f",
-            key="base_amount",
-            label_visibility="collapsed",
-        )
-        st.caption("Stake/Liab base")
+    # Campo compacto antes do cabeçalho de Stake para definir o valor base (somente quando não for "ambos")
+    if entry_type != "both":
+        if "base_amount" not in st.session_state:
+            st.session_state["base_amount"] = 10.00
+        cba1, _ = st.columns([1, 6])
+        with cba1:
+            st.number_input(
+                "Valor base (Stake e Liability)",
+                min_value=0.01,
+                max_value=100000.0,
+                value=float(st.session_state["base_amount"]),
+                step=0.50,
+                format="%.2f",
+                key="base_amount",
+                label_visibility="collapsed",
+            )
+            st.caption("Stake/Liab base")
 
     # Recalcula fatores após possível alteração do input
     base_amount = float(st.session_state.get("base_amount", 10.0))
@@ -773,38 +790,8 @@ def main() -> None:
                     use_container_width=True,
                 )
 
-    # Tabela
-    show_cols = [
-        "date", "track_name", "category_token", "race_time_iso",
-        "num_runners",
-        "tf_top1", "tf_top2", "tf_top3",
-        "vol_top1", "vol_top2", "vol_top3",
-        "second_name_by_volume", "third_name_by_volume",
-        "lay_target_name", "lay_target_bsp",
-        "stake_fixed_10", "liability_from_stake_fixed_10",
-        "stake_for_liability_10", "liability_fixed_10",
-        "win_lose", "is_green", "pnl_stake_fixed_10", "pnl_liability_fixed_10",
-        "roi_row_stake_fixed_10", "roi_row_liability_fixed_10",
-        "pct_diff_second_vs_third",
-    ]
-    missing = [c for c in show_cols if c not in filt.columns]
-    for c in missing:
-        filt[c] = ""
-
-    if entry_type == "back":
-        show_cols = [
-            "date", "track_name", "category_token", "race_time_iso",
-            "num_runners",
-            "tf_top1", "tf_top2", "tf_top3",
-            "vol_top1", "vol_top2", "vol_top3",
-            "second_name_by_volume", "third_name_by_volume",
-            "back_target_name", "back_target_bsp",
-            "stake_fixed_10",
-            "win_lose", "is_green", "pnl_stake_fixed_10",
-            "roi_row_stake_fixed_10",
-            "pct_diff_second_vs_third",
-        ]
-    else:
+    # Tabela (evita duplicação quando entry_type == "both", pois já exibimos 2 tabelas acima)
+    if entry_type != "both":
         show_cols = [
             "date", "track_name", "category_token", "race_time_iso",
             "num_runners",
@@ -818,11 +805,42 @@ def main() -> None:
             "roi_row_stake_fixed_10", "roi_row_liability_fixed_10",
             "pct_diff_second_vs_third",
         ]
+        missing = [c for c in show_cols if c not in filt.columns]
+        for c in missing:
+            filt[c] = ""
 
-    missing = [c for c in show_cols if c not in filt.columns]
-    for c in missing:
-        filt[c] = ""
-    st.dataframe(filt[show_cols], use_container_width=True)
+        if entry_type == "back":
+            show_cols = [
+                "date", "track_name", "category_token", "race_time_iso",
+                "num_runners",
+                "tf_top1", "tf_top2", "tf_top3",
+                "vol_top1", "vol_top2", "vol_top3",
+                "second_name_by_volume", "third_name_by_volume",
+                "back_target_name", "back_target_bsp",
+                "stake_fixed_10",
+                "win_lose", "is_green", "pnl_stake_fixed_10",
+                "roi_row_stake_fixed_10",
+                "pct_diff_second_vs_third",
+            ]
+        else:
+            show_cols = [
+                "date", "track_name", "category_token", "race_time_iso",
+                "num_runners",
+                "tf_top1", "tf_top2", "tf_top3",
+                "vol_top1", "vol_top2", "vol_top3",
+                "second_name_by_volume", "third_name_by_volume",
+                "lay_target_name", "lay_target_bsp",
+                "stake_fixed_10", "liability_from_stake_fixed_10",
+                "stake_for_liability_10", "liability_fixed_10",
+                "win_lose", "is_green", "pnl_stake_fixed_10", "pnl_liability_fixed_10",
+                "roi_row_stake_fixed_10", "roi_row_liability_fixed_10",
+                "pct_diff_second_vs_third",
+            ]
+
+        missing = [c for c in show_cols if c not in filt.columns]
+        for c in missing:
+            filt[c] = ""
+        st.dataframe(filt[show_cols], use_container_width=True)
 
     # Gráficos pequenos: evolução por pista e por categoria (um bloco por tipo de entrada)
     def _render_small_charts(df_block: pd.DataFrame, entry_kind: str) -> None:
@@ -984,6 +1002,9 @@ def main() -> None:
                 if x_axis_mode == "Dia":
                     gp = sp.groupby(["track_name", "category_token", "date_only"], as_index=False)[["pnl_stake_fixed_10"]].sum().sort_values("date_only")
                     gp = gp.merge(sp[["track_name", "track_title"]].drop_duplicates(), on="track_name", how="left")
+                    # contagem por célula (pista×subcategoria)
+                    cell_counts = sp.groupby(["track_name", "category_token"], as_index=False).size().rename(columns={"size": "cell_count"})
+                    gp = gp.merge(cell_counts, on=["track_name", "category_token"], how="left")
                     gp["cum"] = gp.groupby(["track_name", "category_token"])['pnl_stake_fixed_10'].cumsum() * local_scale
                     st.subheader(f"Subcategorias por pista (PnL acumulado) - {entry_kind.upper()}")
                     base_sp = (
@@ -999,6 +1020,8 @@ def main() -> None:
                     sp["bet_idx"] = sp.groupby(["track_name", "category_token"]).cumcount() + 1
                     sp["cum"] = sp.groupby(["track_name", "category_token"])['pnl_stake_fixed_10'].cumsum() * local_scale
                     gp = sp[["track_name", "track_title", "category_token", "bet_idx", "cum"]].copy()
+                    cell_counts = sp.groupby(["track_name", "category_token"], as_index=False).size().rename(columns={"size": "cell_count"})
+                    gp = gp.merge(cell_counts, on=["track_name", "category_token"], how="left")
                     st.subheader(f"Subcategorias por pista (PnL acumulado) - {entry_kind.upper()}")
                     base_sp = (
                         alt.Chart(gp)
@@ -1010,7 +1033,12 @@ def main() -> None:
                         .properties(width=small_width, height=small_height)
                     )
                 zero_line_sp = alt.Chart(gp).mark_rule(color="red", strokeWidth=1).encode(y=alt.datum(0))
-                chart_sp = alt.layer(zero_line_sp, base_sp).facet(
+                count_text_sp = (
+                    alt.Chart(gp)
+                    .mark_text(align="left", baseline="top", dx=4, dy=4, color="#AAAAAA", fontSize=10)
+                    .encode(text=alt.Text("cell_count:Q", format=".0f"))
+                )
+                chart_sp = alt.layer(zero_line_sp, base_sp, count_text_sp).facet(
                     row=alt.Facet("category_token:N", header=alt.Header(title="Subcategoria")),
                     column=alt.Facet("track_title:N", header=alt.Header(title="Pista")),
                 )
@@ -1115,8 +1143,14 @@ def main() -> None:
                 .properties(width=small_width, height=small_height)
             )
         zero = alt.Chart(agg).mark_rule(color="red", strokeWidth=1).encode(y=alt.datum(0))
+        # Rótulo de contagem por célula (count por categoria×N)
+        count_text = (
+            alt.Chart(agg)
+            .mark_text(align="left", baseline="top", dx=4, dy=4, color="#AAAAAA", fontSize=10)
+            .encode(text=alt.Text("count:Q", format=".0f"))
+        )
         st.subheader(f"Evolução por categoria × número de corredores - {entry_kind.upper()}")
-        ch = alt.layer(zero, base).facet(
+        ch = alt.layer(zero, base, count_text).facet(
             row=alt.Facet("num_runners:O", sort="ascending", header=alt.Header(title="")),
             column=alt.Facet("facet_col:N", header=alt.Header(title="")),
         )
@@ -1170,8 +1204,14 @@ def main() -> None:
                 .properties(width=small_width, height=small_height)
             )
         zero = alt.Chart(agg).mark_rule(color="red", strokeWidth=1).encode(y=alt.datum(0))
+        # Rótulo de contagem por célula (count por pista×N)
+        count_text = (
+            alt.Chart(agg)
+            .mark_text(align="left", baseline="top", dx=4, dy=4, color="#AAAAAA", fontSize=10)
+            .encode(text=alt.Text("count:Q", format=".0f"))
+        )
         st.subheader(f"Evolução por pista × número de corredores - {entry_kind.upper()}")
-        ch = alt.layer(zero, base).facet(
+        ch = alt.layer(zero, base, count_text).facet(
             row=alt.Facet("num_runners:O", sort="ascending", header=alt.Header(title="")),
             column=alt.Facet("facet_col:N", header=alt.Header(title="")),
         )
