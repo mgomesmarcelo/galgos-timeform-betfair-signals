@@ -135,10 +135,38 @@ def main() -> None:
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         dates = sorted(df["date"].dropna().unique().tolist())
-        sel_dates = st.multiselect("Datas", dates, default=dates)
+        b1, b2, _ = st.columns([1, 1, 2])
+        with b1:
+            st.button(
+                "Todos",
+                key="dates_all",
+                on_click=lambda: st.session_state.update({"dates_ms": dates}),
+            )
+        with b2:
+            st.button(
+                "Limpar",
+                key="dates_none",
+                on_click=lambda: st.session_state.update({"dates_ms": []}),
+            )
+        default_dates = st.session_state.get("dates_ms", dates)
+        sel_dates = st.multiselect("Datas", dates, default=default_dates, key="dates_ms")
     with col_f2:
         tracks = sorted(df["track_name"].dropna().unique().tolist())
-        sel_tracks = st.multiselect("Pistas", tracks, default=tracks)
+        tb1, tb2, _ = st.columns([1, 1, 2])
+        with tb1:
+            st.button(
+                "Todos",
+                key="tracks_all",
+                on_click=lambda: st.session_state.update({"tracks_ms": tracks}),
+            )
+        with tb2:
+            st.button(
+                "Limpar",
+                key="tracks_none",
+                on_click=lambda: st.session_state.update({"tracks_ms": []}),
+            )
+        default_tracks = st.session_state.get("tracks_ms", tracks)
+        sel_tracks = st.multiselect("Pistas", tracks, default=default_tracks, key="tracks_ms")
     with col_f3:
         if entry_type == "lay":
             bsp_col = "lay_target_bsp"
@@ -284,6 +312,19 @@ def main() -> None:
     if nr_vals:
         nrw, _ = st.columns([2, 5])
         with nrw:
+            nb1, nb2 = st.columns([1, 1])
+            with nb1:
+                st.button(
+                    "Todos",
+                    key="nr_all",
+                    on_click=lambda: st.session_state.update({"num_runners_ms": nr_vals}),
+                )
+            with nb2:
+                st.button(
+                    "Limpar",
+                    key="nr_none",
+                    on_click=lambda: st.session_state.update({"num_runners_ms": []}),
+                )
             prev_nr = st.session_state.get("sel_num_runners", nr_vals.copy())
             default_nr = [v for v in prev_nr if v in nr_vals]
             sel_nr = st.multiselect(
@@ -305,6 +346,19 @@ def main() -> None:
         st.caption("Categorias")
         cw, _ = st.columns([2, 5])
         with cw:
+            cb1, cb2 = st.columns([1, 1])
+            with cb1:
+                st.button(
+                    "Todos",
+                    key="cats_all",
+                    on_click=lambda: st.session_state.update({"cats_ms": cat_letters}),
+                )
+            with cb2:
+                st.button(
+                    "Limpar",
+                    key="cats_none",
+                    on_click=lambda: st.session_state.update({"cats_ms": []}),
+                )
             prev = st.session_state.get("sel_cats", cat_letters.copy())
             default_cats = [c for c in prev if c in cat_letters]
             sel_cats = st.multiselect(
@@ -325,11 +379,31 @@ def main() -> None:
     # Filtro por subcategoria (tokens completos A1, A2, D1, OR3, ...)
     sub_tokens = []
     if "category_token" in filt.columns:
-        sub_tokens = sorted([t for t in filt["category_token"].dropna().astype(str).unique().tolist() if isinstance(t, str) and t])
+        raw_tokens = [t for t in filt["category_token"].dropna().astype(str).unique().tolist() if isinstance(t, str) and t]
+        def _sub_sort_key(tok: str) -> tuple[str, int]:
+            m = re.match(r"^([A-Z]+)(\d+)$", str(tok))
+            if m:
+                return (m.group(1), int(m.group(2)))
+            m2 = re.match(r"^([A-Z]+)", str(tok))
+            return ((m2.group(1) if m2 else str(tok)), 0)
+        sub_tokens = sorted(raw_tokens, key=_sub_sort_key)
     if sub_tokens:
         st.caption("Subcategorias")
         scw, _ = st.columns([2, 5])
         with scw:
+            sb1, sb2 = st.columns([1, 1])
+            with sb1:
+                st.button(
+                    "Todos",
+                    key="subcats_all",
+                    on_click=lambda: st.session_state.update({"subcats_ms": sub_tokens}),
+                )
+            with sb2:
+                st.button(
+                    "Limpar",
+                    key="subcats_none",
+                    on_click=lambda: st.session_state.update({"subcats_ms": []}),
+                )
             prev_sc = st.session_state.get("sel_subcats", sub_tokens.copy())
             default_sc = [t for t in prev_sc if t in sub_tokens]
             sel_subcats = st.multiselect(
@@ -948,12 +1022,21 @@ def main() -> None:
             sd = plot2[plot2["category_token"].astype(str).str.len() > 0].copy()
             if not sd.empty:
                 sub_counts = sd.groupby("category_token", as_index=False).size().rename(columns={"size": "count"})
+                # Ordenação numérica de subcategorias (A1, A2, ..., A10)
+                def _subkey(x: str) -> tuple[str, int]:
+                    m = re.match(r"^([A-Z]+)(\d+)$", str(x))
+                    if m:
+                        return (m.group(1), int(m.group(2)))
+                    m2 = re.match(r"^([A-Z]+)", str(x))
+                    return ((m2.group(1) if m2 else str(x)), 0)
+                ordered_tokens = sorted(sub_counts["category_token"].astype(str).unique().tolist(), key=_subkey)
                 if x_axis_mode == "Dia":
                     sd = sd.groupby(["category_token", "date_only"], as_index=False)[["pnl_stake_fixed_10"]].sum().sort_values("date_only")
                     sd = sd.merge(sub_counts, on="category_token", how="left")
                     sd["count"] = sd["count"].fillna(0).astype(int)
                     sd["cum"] = sd.groupby("category_token")["pnl_stake_fixed_10"].cumsum() * local_scale
                     sd["subcat_title"] = sd["category_token"].astype(str) + " (" + sd["count"].astype(str) + ")"
+                    sd["category_token"] = pd.Categorical(sd["category_token"], categories=ordered_tokens, ordered=True)
                     st.subheader(f"Evolução por subcategoria (PnL acumulado) - {entry_kind.upper()}")
                     base_sub = (
                         alt.Chart(sd)
@@ -965,7 +1048,16 @@ def main() -> None:
                         .properties(width=small_width, height=small_height)
                     )
                     zero_line_s = alt.Chart(sd).mark_rule(color="red", strokeWidth=1).encode(y=alt.datum(0))
-                    chart_sub = alt.layer(zero_line_s, base_sub).facet(facet="subcat_title:N", columns=4)
+                    # label com contagem
+                    count_text_s = (
+                        alt.Chart(sd)
+                        .mark_text(align="left", baseline="top", dx=4, dy=4, color="#AAAAAA", fontSize=10)
+                        .encode(text=alt.Text("count:Q", format=".0f"))
+                    )
+                    chart_sub = alt.layer(zero_line_s, base_sub, count_text_s).facet(
+                        facet=alt.Facet("category_token:N", sort=ordered_tokens, header=alt.Header(title="subcat_title")),
+                        columns=4,
+                    )
                     st.altair_chart(chart_sub.configure_view(stroke="#888", strokeWidth=1), use_container_width=True)
                 else:
                     sd["bet_idx"] = sd.groupby("category_token").cumcount() + 1
@@ -973,6 +1065,7 @@ def main() -> None:
                     sd = sd.merge(sub_counts, on="category_token", how="left")
                     sd["count"] = sd["count"].fillna(0).astype(int)
                     sd["subcat_title"] = sd["category_token"].astype(str) + " (" + sd["count"].astype(str) + ")"
+                    sd["category_token"] = pd.Categorical(sd["category_token"], categories=ordered_tokens, ordered=True)
                     st.subheader(f"Evolução por subcategoria (PnL acumulado) - {entry_kind.upper()}")
                     base_sub = (
                         alt.Chart(sd)
@@ -984,10 +1077,18 @@ def main() -> None:
                         .properties(width=small_width, height=small_height)
                     )
                     zero_line_s = alt.Chart(sd).mark_rule(color="red", strokeWidth=1).encode(y=alt.datum(0))
-                    chart_sub = alt.layer(zero_line_s, base_sub).facet(facet="subcat_title:N", columns=4)
+                    count_text_s = (
+                        alt.Chart(sd)
+                        .mark_text(align="left", baseline="top", dx=4, dy=4, color="#AAAAAA", fontSize=10)
+                        .encode(text=alt.Text("count:Q", format=".0f"))
+                    )
+                    chart_sub = alt.layer(zero_line_s, base_sub, count_text_s).facet(
+                        facet=alt.Facet("category_token:N", sort=ordered_tokens, header=alt.Header(title="subcat_title")),
+                        columns=4,
+                    )
                     st.altair_chart(chart_sub.configure_view(stroke="#888", strokeWidth=1), use_container_width=True)
 
-        # Subcategorias por pista (linhas = subcategorias, colunas = pistas Top K)
+        # Subcategorias por pista (versão simples + contador em cada facet)
         if "category_token" in plot2.columns:
             sp = plot2[plot2["category_token"].astype(str).str.len() > 0].copy()
             if not sp.empty:
@@ -999,14 +1100,14 @@ def main() -> None:
                 sp["track_total"] = sp["track_total"].fillna(0).astype(int)
                 sp["track_title"] = sp["track_name"].astype(str) + " (" + sp["track_total"].astype(str) + ")"
 
+                st.subheader(f"Subcategorias por pista (PnL acumulado) - {entry_kind.upper()}")
                 if x_axis_mode == "Dia":
                     gp = sp.groupby(["track_name", "category_token", "date_only"], as_index=False)[["pnl_stake_fixed_10"]].sum().sort_values("date_only")
                     gp = gp.merge(sp[["track_name", "track_title"]].drop_duplicates(), on="track_name", how="left")
-                    # contagem por célula (pista×subcategoria)
+                    # contador por célula (pista × subcategoria)
                     cell_counts = sp.groupby(["track_name", "category_token"], as_index=False).size().rename(columns={"size": "cell_count"})
                     gp = gp.merge(cell_counts, on=["track_name", "category_token"], how="left")
                     gp["cum"] = gp.groupby(["track_name", "category_token"])['pnl_stake_fixed_10'].cumsum() * local_scale
-                    st.subheader(f"Subcategorias por pista (PnL acumulado) - {entry_kind.upper()}")
                     base_sp = (
                         alt.Chart(gp)
                         .mark_line()
@@ -1016,13 +1117,17 @@ def main() -> None:
                         )
                         .properties(width=small_width, height=small_height)
                     )
+                    count_text_sp = (
+                        alt.Chart(gp)
+                        .mark_text(align="left", baseline="top", dx=4, dy=4, color="#AAAAAA", fontSize=10)
+                        .encode(text=alt.Text("cell_count:Q", format=".0f"))
+                    )
                 else:
                     sp["bet_idx"] = sp.groupby(["track_name", "category_token"]).cumcount() + 1
                     sp["cum"] = sp.groupby(["track_name", "category_token"])['pnl_stake_fixed_10'].cumsum() * local_scale
                     gp = sp[["track_name", "track_title", "category_token", "bet_idx", "cum"]].copy()
                     cell_counts = sp.groupby(["track_name", "category_token"], as_index=False).size().rename(columns={"size": "cell_count"})
                     gp = gp.merge(cell_counts, on=["track_name", "category_token"], how="left")
-                    st.subheader(f"Subcategorias por pista (PnL acumulado) - {entry_kind.upper()}")
                     base_sp = (
                         alt.Chart(gp)
                         .mark_line()
@@ -1032,12 +1137,12 @@ def main() -> None:
                         )
                         .properties(width=small_width, height=small_height)
                     )
+                    count_text_sp = (
+                        alt.Chart(gp)
+                        .mark_text(align="left", baseline="top", dx=4, dy=4, color="#AAAAAA", fontSize=10)
+                        .encode(text=alt.Text("cell_count:Q", format=".0f"))
+                    )
                 zero_line_sp = alt.Chart(gp).mark_rule(color="red", strokeWidth=1).encode(y=alt.datum(0))
-                count_text_sp = (
-                    alt.Chart(gp)
-                    .mark_text(align="left", baseline="top", dx=4, dy=4, color="#AAAAAA", fontSize=10)
-                    .encode(text=alt.Text("cell_count:Q", format=".0f"))
-                )
                 chart_sp = alt.layer(zero_line_sp, base_sp, count_text_sp).facet(
                     row=alt.Facet("category_token:N", header=alt.Header(title="Subcategoria")),
                     column=alt.Facet("track_title:N", header=alt.Header(title="Pista")),
